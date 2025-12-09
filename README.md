@@ -14,13 +14,23 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 ---
 
+## Highlights & Improvements 🚀
+
+- **Advanced Micro-pKa Prediction**: Now integrates **pkasolver**, a Graph Neural Network (GNN) model, to scientifically predict micro-pKa values and determining the major microspecies with high accuracy.
+- **Enhanced Fallback**: Improved integration with **Dimorphite-DL** to display *all* plausible protonation states (microspecies) when using the standard method.
+- **Interactive Methodology**: Choose between "Advanced (pkasolver)" and "Standard (Dimorphite-DL)" calculation modes directly from the UI.
+
+---
+
 ## Core Features
 
 - **SMILES Input**: Accepts a SMILES string to define the initial molecule.
 
 - **2D & 3D Visualization**: Instantly renders 2D chemical diagrams (via RDKit) and interactive 3D structures (via Open Babel & streamlit-molstar).
 
-- **Protonation State Calculation**: Uses **Dimorphite-DL** to calculate the dominant protonation state of the molecule within a user-defined pH range.
+- **Protonation State Calculation**:
+    - **Advanced**: Uses `pkasolver` to identify the major microspecies based on specific pKa transitions.
+    - **Standard**: Uses `Dimorphite-DL` to enumerate highly probable protonation states within a user-defined pH range.
 
 - **Side-by-Side Comparison**: Displays the initial and protonated structures next to each other for easy comparison.
 
@@ -38,7 +48,9 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 - **3D Structure Visualization**: streamlit-molstar
 
-- **Protonation Calculation**: Dimorphite-DL
+- **Protonation Calculation**:
+    - **pkasolver** (Graph Neural Networks)
+    - **Dimorphite-DL** (Rule-based)
 
 ---
 
@@ -71,8 +83,10 @@ conda install -c conda-forge rdkit openbabel dimorphite-dl
 Install the remaining Python packages using pip.
 
 ```
-pip install streamlit streamlit-molstar
+pip install streamlit streamlit-molstar torch torch-geometric
 ```
+
+*Note: For `pkasolver`, you may need to install it from source or check compatibility with your specific environment.*
 
 ---
 
@@ -90,11 +104,18 @@ A new tab will open in your web browser with the application running.
 
 1. **Enter SMILES**: In the sidebar on the left, enter the SMILES string of the molecule you want to analyze. The initial 2D and 3D structures will appear on the main panel.
 
-2. **Set pH Range**: In the sidebar form, adjust the minimum and maximum pH values for the protonation calculation. The default is physiological pH (7.2-7.6).
+2. **Set pH**: Enter the target pH (default 7.4).
+    - If using **Dimorphite-DL**, you can optionally define a min/max range.
 
-3. **Calculate**: Click the "Calculate Protonation State" button.
+3. **Select Method**: Choose between:
+    - **Advanced MicroPka (pkasolver)**: Best for finding the single most stable major microspecies.
+    - **Standard (Dimorphite-DL)**: Best for finding a range of possible states.
 
-4. **View & Download**: The results for the protonated molecule will appear below the initial structure. You can use the download buttons to save the `.mol2` files for either structure.
+4. **Calculate**: Click the "Calculate Protonation State" button.
+
+5. **View & Download**: The results for the protonated molecule(s) will appear below.
+    - If multiple valid states are found, they will be shown in tabs.
+    - You can download the `.mol2` files for any generated structure.
 
 ---
 
@@ -106,32 +127,11 @@ For the application to work correctly, your project folder should be organized a
 /your-project-folder
 |-- rictusempra.py       # The main Streamlit app script
 |-- rictusempra.png      # Your logo file
-|-- requirements.txt   # Python dependencies for Streamlit Cloud
-|-- packages.txt       # System dependencies for Streamlit Cloud
+|-- requirements.txt   # Python dependencies
+|-- packages.txt       # System dependencies
 |-- README.md          # This documentation file
+|-- pkasolver/         # (Optional) Local installation of pkasolver if used
 ```
-
----
-
-## Deployment on Streamlit Cloud
-
-This tool is ready to be deployed on Streamlit Cloud. To ensure a successful deployment, you must include the following two files in your repository:
-
-- **`requirements.txt`**: This file lists the Python packages.
-  
-  ```
-  streamlit
-  rdkit-pypi
-  openbabel-wheel
-  dimorphite-dl
-  streamlit-molstar
-  ```
-
-- **`packages.txt`**: This file lists system-level dependencies required by RDKit.
-  
-  ```
-  libxrender1
-  ```
 
 ---
 
@@ -139,14 +139,17 @@ This tool is ready to be deployed on Streamlit Cloud. To ensure a successful dep
 
 If you use this tool in your research, please cite the underlying open-source packages that make it possible:
 
+- **pkasolver**:
+  Mayr, F., Wieder, O., Wieder, M., & Langer, T. (2022). Improving Small Molecule pKa Prediction Using Transfer Learning with Graph Neural Networks. *bioRxiv*. [https://doi.org/10.1101/2022.01.20.476787](https://www.biorxiv.org/content/10.1101/2022.01.20.476787v1)
+
+- **Dimorphite-DL**:
+  Ropp, P. J., Kaminsky, J. C., Yablonski, S., & Durrant, J. D. (2019). Dimorphite-DL: An open-source program for enumerating the ionization states of drug-like small molecules. *Journal of Cheminformatics*, *11*(1), 51. [https://doi.org/10.1186/s13321-019-0371-5](https://doi.org/10.1186/s13321-019-0371-5).
+
 - **RDKit**:
   RDKit: Open-Source Cheminformatics Software. (n.d.). Retrieved August 24, 2025, from [http://www.rdkit.org](http://www.rdkit.org)
 
 - **Open Babel**:
-  O'Boyle, N. M., Banck, M., James, C. A., Morley, C., Vandermeersch, T., & Hutchison, G. R. (2011). Open Babel: An open chemical toolbox. *Journal of Cheminformatics*, *3*(1), 33. [Open Babel: An open chemical toolbox | Journal of Cheminformatics | Full Text](https://doi.org/10.1186/1758-2946-3-33)
-
-- **Dimorphite-DL**:
-  Ropp, P. J., Kaminsky, J. C., Yablonski, S., & Durrant, J. D. (2019). Dimorphite-DL: An open-source program for enumerating the ionization states of drug-like small molecules. *Journal of Cheminformatics*, *11*(1), 51. [https://doi.org/10.1186/s13321-019-0371-5](https://www.google.com/search?q=https://doi.org/10.1186/s13321-019-0371-5).
+  O'Boyle, N. M., Banck, M., James, C. A., Morley, C., Vandermeersch, T., & Hutchison, G. R. (2011). Open Babel: An open chemical toolbox. *Journal of Cheminformatics*, *3*(1), 33. [https://doi.org/10.1186/1758-2946-3-33](https://doi.org/10.1186/1758-2946-3-33)
 
 ##  <a name='Disclaimer'></a>Disclaimer
 
