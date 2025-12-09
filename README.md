@@ -61,8 +61,8 @@ It is **highly recommended** to use Conda for installation, as it handles the co
 ### Step 1: Clone the Repository
 
 ```
-git clone <your-repository-url>
-cd <your-repository-folder>
+git clone https://github.com/evomol-lab/rictusempra.git
+cd rictusempra
 ```
 
 ### Step 2: Create Conda Environment
