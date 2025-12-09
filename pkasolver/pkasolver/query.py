@@ -8,6 +8,7 @@ from os import path
 import cairosvg
 import numpy as np
 import svgutils.transform as sg
+import sys
 import torch
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Draw
@@ -187,7 +188,7 @@ def _call_dimorphite_dl(
 
     o = subprocess.run(
         [
-            "python",
+            sys.executable,
             f"{path_to_script}/scripts/call_dimorphite_dl.py",
             "--smiles",  # only most probable tautomer generated
             f"{smiles}",  # don't adjust the ionization state of the molecule
