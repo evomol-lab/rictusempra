@@ -11,9 +11,11 @@ from streamlit_molstar import st_molstar
 try:
     from pkasolver.query import calculate_microstate_pka_values
     HAS_PKASOLVER = True
+    PKASOLVER_ERROR = None
 except ImportError as e:
     print(f"DEBUG: pkasolver import failed: {e}")
     HAS_PKASOLVER = False
+    PKASOLVER_ERROR = str(e)
 
 # --- Helper Functions ---
 
@@ -209,7 +211,7 @@ if __name__ == "__main__":
                               index=0 if HAS_PKASOLVER else 1)
             
             if not HAS_PKASOLVER and method == "Advanced MicroPka (pkasolver)":
-                st.warning("pkasolver is not installed. Falling back to Dimorphite-DL.")
+                st.warning(f"pkasolver is not installed. Falling back to Dimorphite-DL. Error: {PKASOLVER_ERROR}")
             
             submitted = st.form_submit_button("Calculate Protonation State")
 
