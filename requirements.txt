@@ -3,3 +3,8 @@ openbabel-wheel
 dimorphite-dl
 streamlit
 streamlit-molstar
+numpy
+torch
+torch_geometric
+tqdm
+./pkasolver
