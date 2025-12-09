@@ -9,3 +9,4 @@ torch_geometric
 tqdm
 ./pkasolver
 cairosvg
+svgutils
