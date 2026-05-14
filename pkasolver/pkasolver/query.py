@@ -117,12 +117,10 @@ class QueryModel:
                 )
 
                 consensus_r.append(y_pred.tolist())
-            results.extend(
-                (
-                    float(np.average(consensus_r, axis=0)),
-                    float(np.std(consensus_r, axis=0)),
-                )
-            )
+            avgs = np.ravel(np.average(consensus_r, axis=0))
+            stds = np.ravel(np.std(consensus_r, axis=0))
+            for a, s in zip(avgs, stds):
+                results.extend((float(a), float(s)))
         return results
 
 
