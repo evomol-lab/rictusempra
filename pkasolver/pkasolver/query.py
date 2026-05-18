@@ -467,6 +467,46 @@ def calculate_microstate_pka_values(
     return mols
 
 
+def calculate_microstate_pka_values_from_smiles(
+    smiles: str, only_dimorphite: bool = False, query_model=None
+):
+    """
+    Calculates pKa values from a SMILES string.
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"Could not parse SMILES {smiles}")
+    return calculate_microstate_pka_values(
+        mol, only_dimorphite=only_dimorphite, query_model=query_model
+    )
+
+
+def calculate_microstate_pka_values_from_pubchem(
+    cid: int, only_dimorphite: bool = False, query_model=None
+):
+    """
+    Fetches a molecule from PubChem by its CID (Compound ID) and calculates its pKa values.
+    """
+    import urllib.request
+    import json
+
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/CanonicalSMILES/JSON"
+    try:
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode())
+            smiles = data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+            logger.info(f"Retrieved SMILES for CID {cid} from PubChem: {smiles}")
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                raise ValueError(f"Could not parse SMILES {smiles} for CID {cid}")
+            return calculate_microstate_pka_values(
+                mol, only_dimorphite=only_dimorphite, query_model=query_model
+            )
+    except Exception as e:
+        logger.error(f"Failed to fetch or process CID {cid} from PubChem: {e}")
+        raise e
+
+
 def draw_pka_map(protonation_states: list, size=(450, 450)):
     """draw mol at pH=7.0 and indicate protonation sites with respectiv pKa values"""
     mol_at_ph_7 = deepcopy(protonation_states[0].ph7_mol)
