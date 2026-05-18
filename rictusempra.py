@@ -40,6 +40,18 @@ def smiles_to_mol2_file(smiles: str, filename: str) -> str | None:
     except Exception:
         return None
 
+def get_smiles_from_pubchem(cid: int) -> str | None:
+    """Fetches the SMILES string for a given PubChem CID."""
+    import urllib.request
+    import json
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/CanonicalSMILES/JSON"
+    try:
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode())
+            return data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+    except Exception:
+        return None
+
 def calculate_major_microspecies_pkasolver(smiles: str, target_ph: float) -> tuple[str | None, list]:
     """
     Uses pkasolver to determine the major microspecies at a target pH.
@@ -191,7 +203,17 @@ if __name__ == "__main__":
                         '[BioME](bioinfo.imd.ufrn.br), UFRN, Brazil.')
         st.header("Controls")
         
-        smiles_input = st.text_input("Enter SMILES string:", "c1ccccc1C(=O)O")
+        input_type = st.radio("Input Method:", ["SMILES", "PubChem CID"])
+        
+        if input_type == "SMILES":
+            smiles_input = st.text_input("Enter SMILES string:", "C1=C(NC=N1)CC(C(=O)O)N")
+        else:
+            cid_input = st.number_input("Enter PubChem CID:", value=773, step=1, min_value=1)
+            smiles_input = get_smiles_from_pubchem(cid_input)
+            if smiles_input:
+                st.caption(f"Loaded SMILES: {smiles_input}")
+            else:
+                st.error("Failed to load SMILES from PubChem")
         
         with st.form("protonation_form"):
             st.write("Set pH for Protonation")
