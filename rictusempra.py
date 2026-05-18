@@ -48,7 +48,8 @@ def get_smiles_from_pubchem(cid: int) -> str | None:
     try:
         with urllib.request.urlopen(url) as response:
             data = json.loads(response.read().decode())
-            return data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+            props = data['PropertyTable']['Properties'][0]
+            return props.get('CanonicalSMILES') or props.get('IsomericSMILES') or props.get('SMILES') or props.get('ConnectivitySMILES')
     except Exception:
         return None
 

@@ -494,7 +494,8 @@ def calculate_microstate_pka_values_from_pubchem(
     try:
         with urllib.request.urlopen(url) as response:
             data = json.loads(response.read().decode())
-            smiles = data['PropertyTable']['Properties'][0]['CanonicalSMILES']
+            props = data['PropertyTable']['Properties'][0]
+            smiles = props.get('CanonicalSMILES') or props.get('IsomericSMILES') or props.get('SMILES') or props.get('ConnectivitySMILES')
             logger.info(f"Retrieved SMILES for CID {cid} from PubChem: {smiles}")
             mol = Chem.MolFromSmiles(smiles)
             if mol is None:
