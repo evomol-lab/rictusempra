@@ -235,8 +235,8 @@ def build_ph_distribution_df(states: list, ph_min: float = 0.0, ph_max: float = 
     of the protonated and deprotonated form of each ionizable group/tautomer
     identified by pkasolver, across a range of pH values.
 
-    Columns: pH, Sitio (site label including its pKa), pKa, Forma
-    (Protonada/Desprotonada), Fracao (0-1).
+    Columns: pH, Site (site label including its pKa), pKa, Form
+    (Protonated/Deprotonated), Fraction (0-1).
     """
     ph_values = np.linspace(ph_min, ph_max, num_points)
     rows = []
@@ -244,10 +244,10 @@ def build_ph_distribution_df(states: list, ph_min: float = 0.0, ph_max: float = 
         pka = float(state.pka)
         frac_prot = protonated_fraction(ph_values, pka)
         frac_deprot = 1.0 - frac_prot
-        site_label = f"Tautômero/sítio {idx} (pKa {pka:.2f})"
+        site_label = f"Tautomer/site {idx} (pKa {pka:.2f})"
         for ph, fp, fd in zip(ph_values, frac_prot, frac_deprot):
-            rows.append({"pH": float(ph), "Sitio": site_label, "pKa": pka, "Forma": "Protonada", "Fracao": float(fp)})
-            rows.append({"pH": float(ph), "Sitio": site_label, "pKa": pka, "Forma": "Desprotonada", "Fracao": float(fd)})
+            rows.append({"pH": float(ph), "Site": site_label, "pKa": pka, "Form": "Protonated", "Fraction": float(fp)})
+            rows.append({"pH": float(ph), "Site": site_label, "pKa": pka, "Form": "Deprotonated", "Fraction": float(fd)})
     return pd.DataFrame(rows)
 
 def summarize_fraction_at_ph(states: list, ph: float) -> pd.DataFrame:
@@ -261,10 +261,10 @@ def summarize_fraction_at_ph(states: list, ph: float) -> pd.DataFrame:
         frac_prot = float(protonated_fraction(ph, pka))
         frac_deprot = 1.0 - frac_prot
         rows.append({
-            "Tautômero/sítio": idx,
+            "Tautomer/Site": idx,
             "pKa": round(pka, 2),
-            "% Protonada": round(frac_prot * 100, 1),
-            "% Desprotonada": round(frac_deprot * 100, 1),
+            "% Protonated": round(frac_prot * 100, 1),
+            "% Deprotonated": round(frac_deprot * 100, 1),
         })
     return pd.DataFrame(rows)
 
@@ -301,17 +301,17 @@ def build_macrospecies_distribution_at_ph(states: list, ph: float) -> pd.DataFra
     rows = []
     for i, frac in enumerate(fractions):
         if i == 0:
-            desc = "mais protonada"
+            desc = "most protonated"
         elif i == n:
-            desc = "mais desprotonada"
+            desc = "most deprotonated"
         else:
-            desc = f"{i} próton(s) removido(s)"
+            desc = f"{i} proton removed" if i == 1 else f"{i} protons removed"
         rows.append({
-            "Microespécie": f"Microespécie {i + 1}",
-            "Descrição": desc,
-            "Prótons removidos": i,
-            "Fração": frac,
-            "Percentual": frac * 100.0,
+            "Microspecies": f"Microspecies {i + 1}",
+            "Description": desc,
+            "Protons removed": i,
+            "Fraction": frac,
+            "Percentage": frac * 100.0,
         })
     return pd.DataFrame(rows)
 
@@ -320,14 +320,48 @@ def plot_macrospecies_distribution(df: pd.DataFrame, target_ph: float) -> alt.La
     Bar chart of the population distribution across macrospecies at the
     target pH (bars sum to 100%), with the percentage labeled on each bar.
     """
-    order = df["Microespécie"].tolist()
+    order = df["Microspecies"].tolist()
     bars = alt.Chart(df).mark_bar().encode(
-        x=alt.X("Microespécie:N", sort=order, title="Microespécie (mais protonada → mais desprotonada)"),
-        y=alt.Y("Percentual:Q", title="% da população total", scale=alt.Scale(domain=[0, 100])),
-        tooltip=["Microespécie", "Descrição", alt.Tooltip("Percentual:Q", format=".2f")],
+        x=alt.X("Microspecies:N", sort=order, title="Microspecies (most protonated → most deprotonated)"),
+        y=alt.Y("Percentage:Q", title="% of total population", scale=alt.Scale(domain=[0, 100])),
+        tooltip=["Microspecies", "Description", alt.Tooltip("Percentage:Q", format=".2f")],
     )
-    labels = bars.mark_text(dy=-8).encode(text=alt.Text("Percentual:Q", format=".1f"))
-    return (bars + labels).properties(height=320, title=f"Distribuição das microespécies em pH {target_ph:.2f}")
+    labels = bars.mark_text(dy=-8).encode(text=alt.Text("Percentage:Q", format=".1f"))
+    return (bars + labels).properties(height=320, title=f"Microspecies distribution at pH {target_ph:.2f}")
+
+def build_macrospecies_distribution_sweep(states: list, ph_min: float = 0.0, ph_max: float = 14.0, step: float = 0.5) -> pd.DataFrame:
+    """
+    Sweeps pH from `ph_min` to `ph_max` (inclusive) in increments of `step`,
+    computing the macrospecies population distribution (see
+    `build_macrospecies_distribution_at_ph`) at each point. At every pH value
+    the percentages across microspecies still add up to 100%.
+    """
+    num_steps = int(round((ph_max - ph_min) / step))
+    rows = []
+    for i in range(num_steps + 1):
+        ph = round(ph_min + i * step, 10)
+        df = build_macrospecies_distribution_at_ph(states, ph)
+        df.insert(0, "pH", round(ph, 2))
+        rows.append(df)
+    return pd.concat(rows, ignore_index=True)
+
+def plot_macrospecies_sweep(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
+    """
+    Stacked area chart of the macrospecies population distribution across a
+    full pH sweep, one color per microspecies. At every pH the stacked
+    percentages add up to 100%. A dashed vertical line marks the currently
+    selected target pH.
+    """
+    order = sorted(df["Microspecies"].unique(), key=lambda m: int(m.rsplit(" ", 1)[-1]))
+    area = alt.Chart(df).mark_area().encode(
+        x=alt.X("pH:Q", title="pH"),
+        y=alt.Y("Percentage:Q", title="% of total population", stack="zero", scale=alt.Scale(domain=[0, 100])),
+        color=alt.Color("Microspecies:N", sort=order, title="Microspecies"),
+        order=alt.Order("Protons removed:Q"),
+        tooltip=["Microspecies", "Description", alt.Tooltip("pH:Q", format=".2f"), alt.Tooltip("Percentage:Q", format=".2f")],
+    )
+    ph_rule = alt.Chart(pd.DataFrame({"pH": [target_ph]})).mark_rule(color="red", strokeDash=[4, 4]).encode(x="pH:Q")
+    return (area + ph_rule).properties(height=350, title="Microspecies distribution across the pH range")
 
 def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
     """
@@ -337,16 +371,16 @@ def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
     """
     base = alt.Chart(df).mark_line().encode(
         x=alt.X("pH:Q", title="pH"),
-        y=alt.Y("Fracao:Q", title="Razão (fração da população)", scale=alt.Scale(domain=[0, 1])),
-        color=alt.Color("Forma:N", title="Forma"),
-        strokeDash=alt.StrokeDash("Sitio:N", title="Tautômero / sítio ionizável"),
-        tooltip=["Sitio", "Forma", alt.Tooltip("pH:Q", format=".2f"), alt.Tooltip("Fracao:Q", format=".2%"), alt.Tooltip("pKa:Q", format=".2f")],
+        y=alt.Y("Fraction:Q", title="Ratio (fraction of the population)", scale=alt.Scale(domain=[0, 1])),
+        color=alt.Color("Form:N", title="Form"),
+        strokeDash=alt.StrokeDash("Site:N", title="Tautomer / ionizable site"),
+        tooltip=["Site", "Form", alt.Tooltip("pH:Q", format=".2f"), alt.Tooltip("Fraction:Q", format=".2%"), alt.Tooltip("pKa:Q", format=".2f")],
     )
 
-    pka_df = df[["Sitio", "pKa"]].drop_duplicates()
+    pka_df = df[["Site", "pKa"]].drop_duplicates()
     pka_rule = alt.Chart(pka_df).mark_rule(strokeDash=[2, 2], color="gray").encode(
         x="pKa:Q",
-        tooltip=["Sitio", alt.Tooltip("pKa:Q", format=".2f")],
+        tooltip=["Site", alt.Tooltip("pKa:Q", format=".2f")],
     )
 
     ph_rule = alt.Chart(pd.DataFrame({"pH": [target_ph]})).mark_rule(
@@ -455,13 +489,13 @@ if __name__ == "__main__":
 
                     # --- Ratio of each tautomer/microspecies vs pH and pKa ---
                     if states:
-                        st.subheader("Razão de cada tautômero em função do pH e do pKa")
+                        st.subheader("Ratio of each tautomer as a function of pH and pKa")
                         st.caption(
-                            "Para cada grupo ionizável (tautômero/microespécie) identificado pelo "
-                            "pkasolver, a curva mostra a razão (fração da população) das formas "
-                            "protonada e desprotonada ao longo do pH, calculada pela equação de "
-                            "Henderson-Hasselbalch. A linha tracejada cinza marca o pKa de cada "
-                            "grupo; a linha tracejada vermelha marca o pH alvo selecionado."
+                            "For each ionizable group (tautomer/microspecies) identified by "
+                            "pkasolver, the curve shows the ratio (fraction of the population) of "
+                            "the protonated and deprotonated forms across pH, calculated with the "
+                            "Henderson-Hasselbalch equation. The gray dashed line marks each "
+                            "group's pKa; the red dashed line marks the selected target pH."
                         )
                         dist_df = build_ph_distribution_df(states, ph_min=0.0, ph_max=14.0)
                         st.altair_chart(plot_ph_distribution(dist_df, target_ph), use_container_width=True)
@@ -472,22 +506,40 @@ if __name__ == "__main__":
                         )
 
                         # --- Population distribution across macrospecies at the target pH (sums to 100%) ---
-                        st.subheader(f"Quantidade de cada microespécie em pH {target_ph:.2f}")
+                        st.subheader(f"Amount of each microspecies at pH {target_ph:.2f}")
                         st.caption(
-                            "Diferente do gráfico acima (que trata cada sítio isoladamente), aqui a "
-                            "molécula é dividida nas microespécies sequenciais definidas pelos pKa "
-                            "identificados — da forma mais protonada à mais desprotonada — e a fração "
-                            "de cada uma no pH escolhido é calculada encadeando Henderson-Hasselbalch "
-                            "ao longo da escada de pKa. As frações sempre somam 1 (100%)."
+                            "Unlike the chart above (which treats each site independently), here "
+                            "the molecule is split into its sequential microspecies defined by the "
+                            "identified pKa values — from the most protonated to the most "
+                            "deprotonated form — and the fraction of each one at the chosen pH is "
+                            "calculated by chaining Henderson-Hasselbalch along the pKa ladder. "
+                            "The fractions always add up to 1 (100%)."
                         )
                         macro_df = build_macrospecies_distribution_at_ph(states, target_ph)
                         st.altair_chart(plot_macrospecies_distribution(macro_df, target_ph), use_container_width=True)
                         st.dataframe(
-                            macro_df[["Microespécie", "Descrição", "Percentual"]].round({"Percentual": 2}),
+                            macro_df[["Microspecies", "Description", "Percentage"]].round({"Percentage": 2}),
                             width="stretch",
                             hide_index=True,
                         )
-                        st.caption(f"Soma das frações: {macro_df['Percentual'].sum():.2f}%")
+                        st.caption(f"Sum of fractions: {macro_df['Percentage'].sum():.2f}%")
+
+                        # --- Microspecies distribution swept across the full pH range ---
+                        st.subheader("Microspecies distribution across the pH range")
+                        st.caption(
+                            "The same microspecies breakdown as above, now swept across pH 0–14 "
+                            "in steps of 0.5. Each microspecies gets its own color in the stacked "
+                            "area chart; at every pH the stack still adds up to 100%. The dashed "
+                            "line marks the selected target pH."
+                        )
+                        sweep_df = build_macrospecies_distribution_sweep(states, ph_min=0.0, ph_max=14.0, step=0.5)
+                        st.altair_chart(plot_macrospecies_sweep(sweep_df, target_ph), use_container_width=True)
+                        st.download_button(
+                            label="Download pH sweep data (.csv)",
+                            data=sweep_df.to_csv(index=False),
+                            file_name="microspecies_ph_sweep.csv",
+                            mime="text/csv",
+                        )
 
             else: # Dimorphite
                 with st.spinner("Running Dimorphite-DL..."):
