@@ -19,6 +19,7 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 - **Advanced Micro-pKa Prediction**: Now integrates **pkasolver**, a Graph Neural Network (GNN) model, to scientifically predict micro-pKa values and determining the major microspecies with high accuracy.
 - **Enhanced Fallback**: Improved integration with **Dimorphite-DL** to display *all* plausible protonation states (microspecies) when using the standard method.
 - **Interactive Methodology**: Choose between "Advanced (pkasolver)" and "Standard (Dimorphite-DL)" calculation modes directly from the UI.
+- **Tautomer/Microspecies Ratio vs. pH**: For each ionizable group identified by pkasolver, plots the protonated/deprotonated ratio across a full pH range (Henderson-Hasselbalch), with the group's pKa and the chosen target pH marked on the curve, plus a summary table with the exact percentages at the target pH.
 
 ---
 
@@ -26,15 +27,17 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 - **SMILES Input**: Accepts a SMILES string to define the initial molecule.
 
-- **2D & 3D Visualization**: Instantly renders 2D chemical diagrams (via RDKit) and interactive 3D structures (via Open Babel & streamlit-molstar).
+- **2D & 3D Visualization**: Instantly renders 2D chemical diagrams and interactive 3D structures (via RDKit & streamlit-molstar).
 
 - **Protonation State Calculation**:
     - **Advanced**: Uses `pkasolver` to identify the major microspecies based on specific pKa transitions.
     - **Standard**: Uses `Dimorphite-DL` to enumerate highly probable protonation states within a user-defined pH range.
 
+- **Tautomer/Microspecies Ratio vs. pH and pKa**: When using the Advanced (pkasolver) method, shows an interactive chart with the protonated/deprotonated ratio of each ionizable group as a function of pH (Henderson-Hasselbalch), plus a table with the exact percentages at the selected target pH.
+
 - **Side-by-Side Comparison**: Displays the initial and protonated structures next to each other for easy comparison.
 
-- **Structure Download**: Allows users to download the generated 3D structures in `.mol2` format.
+- **Structure Download**: Allows users to download the generated 3D structures in `.sdf` format.
 
 ---
 
@@ -44,7 +47,7 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 - **2D Structure Rendering**: RDKit
 
-- **3D Structure Generation**: Open Babel
+- **3D Structure Generation**: RDKit (ETKDG embedding + MMFF/UFF force field optimization)
 
 - **3D Structure Visualization**: streamlit-molstar
 
@@ -52,11 +55,13 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
     - **pkasolver** (Graph Neural Networks)
     - **Dimorphite-DL** (Rule-based)
 
+- **Ratio-vs-pH Charts**: Pandas & Altair
+
 ---
 
 ## Installation and Setup
 
-It is **highly recommended** to use Conda for installation, as it handles the complex dependencies of RDKit and Open Babel smoothly.
+It is **highly recommended** to use Conda for installation, as it handles the complex dependencies of RDKit smoothly.
 
 ### Step 1: Clone the Repository
 
@@ -75,7 +80,7 @@ conda create -n rictusempra python=3.9
 conda activate rictusempra
 
 # Install packages from conda-forge
-conda install -c conda-forge rdkit openbabel dimorphite-dl
+conda install -c conda-forge rdkit dimorphite-dl
 ```
 
 ### Step 3: Install Pip Dependencies
@@ -115,7 +120,9 @@ A new tab will open in your web browser with the application running.
 
 5. **View & Download**: The results for the protonated molecule(s) will appear below.
     - If multiple valid states are found, they will be shown in tabs.
-    - You can download the `.mol2` files for any generated structure.
+    - You can download the `.sdf` files for any generated structure.
+
+6. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Razão de cada tautômero em função do pH e do pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
 
 ---
 
@@ -148,8 +155,30 @@ If you use this tool in your research, please cite the underlying open-source pa
 - **RDKit**:
   RDKit: Open-Source Cheminformatics Software. (n.d.). Retrieved August 24, 2025, from [http://www.rdkit.org](http://www.rdkit.org)
 
-- **Open Babel**:
-  O'Boyle, N. M., Banck, M., James, C. A., Morley, C., Vandermeersch, T., & Hutchison, G. R. (2011). Open Babel: An open chemical toolbox. *Journal of Cheminformatics*, *3*(1), 33. [https://doi.org/10.1186/1758-2946-3-33](https://doi.org/10.1186/1758-2946-3-33)
+## License
+
+Rictusempra's own source code is released under the **MIT License** — see [`LICENSE`](LICENSE).
+
+### Third-party licenses
+
+Rictusempra is built on top of several open-source packages, each under its own license:
+
+| Package | License |
+|---|---|
+| [RDKit](https://www.rdkit.org) | BSD-3-Clause |
+| [Dimorphite-DL](https://github.com/durrantlab/dimorphite_dl) | Apache-2.0 |
+| [pkasolver](https://github.com/mayrf/pkasolver) (vendored in this repo) | MIT |
+| [Streamlit](https://streamlit.io) | Apache-2.0 |
+| [streamlit-molstar](https://github.com/pragmatic-streamlit/streamlit-molstar) | OSI-approved (see upstream repo) |
+| [PyTorch](https://pytorch.org) | BSD-3-Clause |
+| [PyTorch Geometric](https://pytorch-geometric.readthedocs.io) | MIT |
+| [CairoSVG](https://cairosvg.org) | LGPL-3.0-or-later |
+| [svgutils](https://svgutils.readthedocs.io) | MIT |
+| [pandas](https://pandas.pydata.org) | BSD-3-Clause |
+| [Vega-Altair](https://altair-viz.github.io) | BSD-3-Clause |
+| [NumPy](https://numpy.org) | BSD-3-Clause |
+
+All of Rictusempra's dependencies are permissive (MIT/BSD/Apache-2.0) or weak-copyleft (LGPL-3.0, used by `cairosvg`, which permits dynamic use without requiring the rest of the application to be LGPL). Earlier versions of this tool used **Open Babel (GPL-2.0)** for 3D structure generation; that dependency has been replaced with RDKit's own ETKDG embedding + MMFF/UFF optimization, so no strong-copyleft (GPL) component remains anywhere in the stack.
 
 ##  <a name='Disclaimer'></a>Disclaimer
 

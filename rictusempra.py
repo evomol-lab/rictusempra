@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import altair as alt
 from rdkit import Chem
+from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import MolToImage
-from openbabel import pybel
 from streamlit_molstar import st_molstar
 
 # Try to import pkasolver
@@ -31,14 +31,39 @@ def smiles_to_2d_image(smiles: str):
     except Exception:
         return None
 
-def smiles_to_mol2_file(smiles: str, filename: str) -> str | None:
+def smiles_to_3d_file(smiles: str, filename: str) -> str | None:
     """
-    Generates a 3D structure, saves it as a MOL2 file, and returns the path.
+    Generates a 3D structure using RDKit (ETKDG embedding + MMFF/UFF force
+    field optimization) and saves it as an SDF file. Returns the path.
+
+    Uses RDKit instead of Open Babel so the whole toolchain stays under
+    permissive (non-copyleft) licenses.
     """
     try:
-        mol = pybel.readstring("smi", smiles)
-        mol.make3D()
-        mol.write("mol2", filename, overwrite=True)
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        mol = Chem.AddHs(mol)
+
+        params = AllChem.ETKDGv3()
+        params.randomSeed = 0xF00D
+        if AllChem.EmbedMolecule(mol, params) != 0:
+            # Retry with random coordinates as a fallback for tricky molecules
+            if AllChem.EmbedMolecule(mol, useRandomCoords=True, randomSeed=0xF00D) != 0:
+                return None
+
+        # Optimize geometry; MMFF94 first, falling back to UFF if unsupported
+        try:
+            AllChem.MMFFOptimizeMolecule(mol)
+        except Exception:
+            try:
+                AllChem.UFFOptimizeMolecule(mol)
+            except Exception:
+                pass
+
+        writer = Chem.SDWriter(filename)
+        writer.write(mol)
+        writer.close()
         return filename
     except Exception:
         return None
@@ -243,6 +268,67 @@ def summarize_fraction_at_ph(states: list, ph: float) -> pd.DataFrame:
         })
     return pd.DataFrame(rows)
 
+def build_macrospecies_distribution_at_ph(states: list, ph: float) -> pd.DataFrame:
+    """
+    Computes the population distribution across the molecule's sequential
+    macrospecies (overall protonation states) at a given pH.
+
+    The `n` pKa transitions identified by pkasolver define a ladder of
+    `n + 1` macrospecies, from the most protonated (index 0, before any of
+    the identified groups has lost a proton) to the most deprotonated
+    (index n, after all of them have). Each step between consecutive
+    macrospecies follows Henderson-Hasselbalch, so the fraction of
+    macrospecies `i` relative to macrospecies `i-1` is `10 ** (pH - pKa_i)`.
+    Chaining these ratios and normalizing gives a distribution that always
+    sums to 1 (100%) — unlike the per-site ratios in
+    `build_ph_distribution_df`, which treat each site independently.
+    """
+    pkas = sorted(float(s.pka) for s in states)
+    n = len(pkas)
+
+    # log10 of the (unnormalized) weight of each macrospecies, built
+    # cumulatively to stay numerically stable regardless of how many
+    # ionizable groups are chained together.
+    log_weights = [0.0]
+    for pka in pkas:
+        log_weights.append(log_weights[-1] + (ph - pka))
+
+    max_log = max(log_weights)
+    weights = [10.0 ** (lw - max_log) for lw in log_weights]
+    total = sum(weights)
+    fractions = [w / total for w in weights]
+
+    rows = []
+    for i, frac in enumerate(fractions):
+        if i == 0:
+            desc = "mais protonada"
+        elif i == n:
+            desc = "mais desprotonada"
+        else:
+            desc = f"{i} próton(s) removido(s)"
+        rows.append({
+            "Microespécie": f"Microespécie {i + 1}",
+            "Descrição": desc,
+            "Prótons removidos": i,
+            "Fração": frac,
+            "Percentual": frac * 100.0,
+        })
+    return pd.DataFrame(rows)
+
+def plot_macrospecies_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
+    """
+    Bar chart of the population distribution across macrospecies at the
+    target pH (bars sum to 100%), with the percentage labeled on each bar.
+    """
+    order = df["Microespécie"].tolist()
+    bars = alt.Chart(df).mark_bar().encode(
+        x=alt.X("Microespécie:N", sort=order, title="Microespécie (mais protonada → mais desprotonada)"),
+        y=alt.Y("Percentual:Q", title="% da população total", scale=alt.Scale(domain=[0, 100])),
+        tooltip=["Microespécie", "Descrição", alt.Tooltip("Percentual:Q", format=".2f")],
+    )
+    labels = bars.mark_text(dy=-8).encode(text=alt.Text("Percentual:Q", format=".1f"))
+    return (bars + labels).properties(height=320, title=f"Distribuição das microespécies em pH {target_ph:.2f}")
+
 def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
     """
     Builds an Altair chart with one curve per ionizable group/tautomer showing
@@ -326,24 +412,24 @@ if __name__ == "__main__":
         # --- Initial Structure Display ---
         st.header("Initial Structure", divider="rainbow")
         
-        initial_mol2_path = smiles_to_mol2_file(smiles_input, "initial.mol2")
+        initial_structure_path = smiles_to_3d_file(smiles_input, "initial.sdf")
         img_initial = smiles_to_2d_image(smiles_input)
 
-        if initial_mol2_path and img_initial:
+        if initial_structure_path and img_initial:
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader("2D Structure")
                 st.image(img_initial, width="stretch")
             with col2:
                 st.subheader("3D Structure")
-                st_molstar(initial_mol2_path, key="molstar_initial")
-                
-                mol2_content = read_file_content(initial_mol2_path)
+                st_molstar(initial_structure_path, key="molstar_initial")
+
+                sdf_content = read_file_content(initial_structure_path)
                 st.download_button(
-                    label="Download .mol2 File",
-                    data=mol2_content,
-                    file_name="initial_structure.mol2",
-                    mime="chemical/x-mol2"
+                    label="Download .sdf File",
+                    data=sdf_content,
+                    file_name="initial_structure.sdf",
+                    mime="chemical/x-mdl-sdfile"
                 )
         else:
             st.error("Invalid SMILES string. Please check your input.")
@@ -385,6 +471,24 @@ if __name__ == "__main__":
                             hide_index=True,
                         )
 
+                        # --- Population distribution across macrospecies at the target pH (sums to 100%) ---
+                        st.subheader(f"Quantidade de cada microespécie em pH {target_ph:.2f}")
+                        st.caption(
+                            "Diferente do gráfico acima (que trata cada sítio isoladamente), aqui a "
+                            "molécula é dividida nas microespécies sequenciais definidas pelos pKa "
+                            "identificados — da forma mais protonada à mais desprotonada — e a fração "
+                            "de cada uma no pH escolhido é calculada encadeando Henderson-Hasselbalch "
+                            "ao longo da escada de pKa. As frações sempre somam 1 (100%)."
+                        )
+                        macro_df = build_macrospecies_distribution_at_ph(states, target_ph)
+                        st.altair_chart(plot_macrospecies_distribution(macro_df, target_ph), use_container_width=True)
+                        st.dataframe(
+                            macro_df[["Microespécie", "Descrição", "Percentual"]].round({"Percentual": 2}),
+                            width="stretch",
+                            hide_index=True,
+                        )
+                        st.caption(f"Soma das frações: {macro_df['Percentual'].sum():.2f}%")
+
             else: # Dimorphite
                 with st.spinner("Running Dimorphite-DL..."):
                     smi_list = run_dimorphite(smiles_input, min_ph, max_ph)
@@ -405,30 +509,30 @@ if __name__ == "__main__":
                         smi, label = results[i]
                         with tab:
                             st.code(smi, language="smiles")
-                            mol2_path = smiles_to_mol2_file(smi, f"protonated_{i}.mol2")
+                            structure_path = smiles_to_3d_file(smi, f"protonated_{i}.sdf")
                             img = smiles_to_2d_image(smi)
-                            
-                            if mol2_path and img:
+
+                            if structure_path and img:
                                 c3, c4 = st.columns(2)
                                 with c3:
                                     st.image(img, width="stretch")
                                 with c4:
-                                    st_molstar(mol2_path, key=f"molstar_res_{i}")
-                                    content = read_file_content(mol2_path)
-                                    st.download_button("Download", content, f"structure_{i}.mol2", "chemical/x-mol2", key=f"dl_{i}")
+                                    st_molstar(structure_path, key=f"molstar_res_{i}")
+                                    content = read_file_content(structure_path)
+                                    st.download_button("Download", content, f"structure_{i}.sdf", "chemical/x-mdl-sdfile", key=f"dl_{i}")
                 else:
                     # Single result
                     smi, label = results[0]
                     st.subheader(label)
                     st.code(smi, language="smiles")
-                    mol2_path = smiles_to_mol2_file(smi, f"protonated.mol2")
+                    structure_path = smiles_to_3d_file(smi, f"protonated.sdf")
                     img = smiles_to_2d_image(smi)
-                    
-                    if mol2_path and img:
+
+                    if structure_path and img:
                         c3, c4 = st.columns(2)
                         with c3:
                             st.image(img, width="stretch")
                         with c4:
-                            st_molstar(mol2_path, key=f"molstar_res_single")
-                            content = read_file_content(mol2_path)
-                            st.download_button("Download", content, "protonated_structure.mol2", "chemical/x-mol2")
+                            st_molstar(structure_path, key=f"molstar_res_single")
+                            content = read_file_content(structure_path)
+                            st.download_button("Download", content, "protonated_structure.sdf", "chemical/x-mdl-sdfile")
