@@ -2,6 +2,9 @@ import streamlit as st
 import subprocess
 import os
 import shutil
+import numpy as np
+import pandas as pd
+import altair as alt
 from rdkit import Chem
 from rdkit.Chem.Draw import MolToImage
 from openbabel import pybel
@@ -53,26 +56,29 @@ def get_smiles_from_pubchem(cid: int) -> str | None:
     except Exception:
         return None
 
-def calculate_major_microspecies_pkasolver(smiles: str, target_ph: float) -> tuple[str | None, list]:
+def calculate_major_microspecies_pkasolver(smiles: str, target_ph: float) -> tuple[str | None, list, list]:
     """
     Uses pkasolver to determine the major microspecies at a target pH.
-    Returns: (best_smiles, debug_info_list)
+    Returns: (best_smiles, debug_info_list, states)
+    `states` is the list of pkasolver 'States' objects (one per ionizable
+    group/tautomeric transition identified), used to plot the ratio of each
+    species as a function of pH.
     """
     if not HAS_PKASOLVER:
-        return None, ["pkasolver library not installed."]
+        return None, ["pkasolver library not installed."], []
 
     try:
         mol = Chem.MolFromSmiles(smiles)
         if not mol:
-            return None, ["Invalid SMILES."]
-        
+            return None, ["Invalid SMILES."], []
+
         # Calculate pKa microstates
         # This returns a list of 'States' objects (transitions)
         states = calculate_microstate_pka_values(mol)
-        
+
         if not states:
             # No ionizable groups found, return original
-            return smiles, ["No ionizable groups identified by pkasolver."]
+            return smiles, ["No ionizable groups identified by pkasolver."], []
 
         # Identification Logic: "Minimal Violation Score"
         # We want the species that is consistent with the most pKa transitions at the target pH.
@@ -133,12 +139,12 @@ def calculate_major_microspecies_pkasolver(smiles: str, target_ph: float) -> tup
                      final_info.append(f"State is Protonated form of transition pKa {state.pka:.2f}")
                  if deprot_smi == best_smiles:
                      final_info.append(f"State is Deprotonated form of transition pKa {state.pka:.2f}")
-            return best_smiles, final_info
-            
-        return None, ["Could not determine best species."]
+            return best_smiles, final_info, states
+
+        return None, ["Could not determine best species."], states
 
     except Exception as e:
-        return None, [f"Error in pkasolver: {e}"]
+        return None, [f"Error in pkasolver: {e}"], []
 
 
 def run_dimorphite(smiles: str, min_ph: float, max_ph: float) -> list[str]:
@@ -186,6 +192,82 @@ def read_file_content(filepath: str) -> str:
     """Reads and returns the content of a file."""
     with open(filepath, 'r') as f:
         return f.read()
+
+def protonated_fraction(ph, pka):
+    """
+    Fraction of the protonated form of an ionizable group at a given pH,
+    using the Henderson-Hasselbalch equation:
+
+        fraction_protonated = 1 / (1 + 10 ** (pH - pKa))
+
+    `ph` can be a scalar or a numpy array.
+    """
+    return 1.0 / (1.0 + 10.0 ** (np.asarray(ph, dtype=float) - pka))
+
+def build_ph_distribution_df(states: list, ph_min: float = 0.0, ph_max: float = 14.0, num_points: int = 281) -> pd.DataFrame:
+    """
+    Builds a long-format DataFrame with the ratio (fraction of the population)
+    of the protonated and deprotonated form of each ionizable group/tautomer
+    identified by pkasolver, across a range of pH values.
+
+    Columns: pH, Sitio (site label including its pKa), pKa, Forma
+    (Protonada/Desprotonada), Fracao (0-1).
+    """
+    ph_values = np.linspace(ph_min, ph_max, num_points)
+    rows = []
+    for idx, state in enumerate(states, start=1):
+        pka = float(state.pka)
+        frac_prot = protonated_fraction(ph_values, pka)
+        frac_deprot = 1.0 - frac_prot
+        site_label = f"Tautômero/sítio {idx} (pKa {pka:.2f})"
+        for ph, fp, fd in zip(ph_values, frac_prot, frac_deprot):
+            rows.append({"pH": float(ph), "Sitio": site_label, "pKa": pka, "Forma": "Protonada", "Fracao": float(fp)})
+            rows.append({"pH": float(ph), "Sitio": site_label, "pKa": pka, "Forma": "Desprotonada", "Fracao": float(fd)})
+    return pd.DataFrame(rows)
+
+def summarize_fraction_at_ph(states: list, ph: float) -> pd.DataFrame:
+    """
+    Summarizes, for the chosen target pH, the ratio (%) of the protonated and
+    deprotonated form of each ionizable group/tautomer identified by pkasolver.
+    """
+    rows = []
+    for idx, state in enumerate(states, start=1):
+        pka = float(state.pka)
+        frac_prot = float(protonated_fraction(ph, pka))
+        frac_deprot = 1.0 - frac_prot
+        rows.append({
+            "Tautômero/sítio": idx,
+            "pKa": round(pka, 2),
+            "% Protonada": round(frac_prot * 100, 1),
+            "% Desprotonada": round(frac_deprot * 100, 1),
+        })
+    return pd.DataFrame(rows)
+
+def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
+    """
+    Builds an Altair chart with one curve per ionizable group/tautomer showing
+    how its protonated/deprotonated ratio changes with pH, plus reference
+    lines marking each pKa and the currently selected target pH.
+    """
+    base = alt.Chart(df).mark_line().encode(
+        x=alt.X("pH:Q", title="pH"),
+        y=alt.Y("Fracao:Q", title="Razão (fração da população)", scale=alt.Scale(domain=[0, 1])),
+        color=alt.Color("Forma:N", title="Forma"),
+        strokeDash=alt.StrokeDash("Sitio:N", title="Tautômero / sítio ionizável"),
+        tooltip=["Sitio", "Forma", alt.Tooltip("pH:Q", format=".2f"), alt.Tooltip("Fracao:Q", format=".2%"), alt.Tooltip("pKa:Q", format=".2f")],
+    )
+
+    pka_df = df[["Sitio", "pKa"]].drop_duplicates()
+    pka_rule = alt.Chart(pka_df).mark_rule(strokeDash=[2, 2], color="gray").encode(
+        x="pKa:Q",
+        tooltip=["Sitio", alt.Tooltip("pKa:Q", format=".2f")],
+    )
+
+    ph_rule = alt.Chart(pd.DataFrame({"pH": [target_ph]})).mark_rule(
+        color="red", strokeDash=[4, 4]
+    ).encode(x="pH:Q")
+
+    return (base + pka_rule + ph_rule).properties(height=350)
 
 # --- Streamlit App ---
 
@@ -274,7 +356,7 @@ if __name__ == "__main__":
             
             if method == "Advanced MicroPka (pkasolver)" and HAS_PKASOLVER:
                 with st.spinner("Running pkasolver (Micro-pKa)..."):
-                    best_smi, info = calculate_major_microspecies_pkasolver(smiles_input, target_ph)
+                    best_smi, info, states = calculate_major_microspecies_pkasolver(smiles_input, target_ph)
                     if best_smi:
                         results.append((best_smi, "Major Microspecies (pkasolver)"))
                         with st.expander("See pkasolver details"):
@@ -284,6 +366,24 @@ if __name__ == "__main__":
                          st.error("pkasolver failed to return a structure.")
                          for i in info:
                                 st.write(f"- {i}")
+
+                    # --- Ratio of each tautomer/microspecies vs pH and pKa ---
+                    if states:
+                        st.subheader("Razão de cada tautômero em função do pH e do pKa")
+                        st.caption(
+                            "Para cada grupo ionizável (tautômero/microespécie) identificado pelo "
+                            "pkasolver, a curva mostra a razão (fração da população) das formas "
+                            "protonada e desprotonada ao longo do pH, calculada pela equação de "
+                            "Henderson-Hasselbalch. A linha tracejada cinza marca o pKa de cada "
+                            "grupo; a linha tracejada vermelha marca o pH alvo selecionado."
+                        )
+                        dist_df = build_ph_distribution_df(states, ph_min=0.0, ph_max=14.0)
+                        st.altair_chart(plot_ph_distribution(dist_df, target_ph), use_container_width=True)
+                        st.dataframe(
+                            summarize_fraction_at_ph(states, target_ph),
+                            width="stretch",
+                            hide_index=True,
+                        )
 
             else: # Dimorphite
                 with st.spinner("Running Dimorphite-DL..."):
