@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import altair as alt
 from rdkit import Chem
+from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import MolToImage
-from openbabel import pybel
 from streamlit_molstar import st_molstar
 
 # Try to import pkasolver
@@ -31,14 +31,39 @@ def smiles_to_2d_image(smiles: str):
     except Exception:
         return None
 
-def smiles_to_mol2_file(smiles: str, filename: str) -> str | None:
+def smiles_to_3d_file(smiles: str, filename: str) -> str | None:
     """
-    Generates a 3D structure, saves it as a MOL2 file, and returns the path.
+    Generates a 3D structure using RDKit (ETKDG embedding + MMFF/UFF force
+    field optimization) and saves it as an SDF file. Returns the path.
+
+    Uses RDKit instead of Open Babel so the whole toolchain stays under
+    permissive (non-copyleft) licenses.
     """
     try:
-        mol = pybel.readstring("smi", smiles)
-        mol.make3D()
-        mol.write("mol2", filename, overwrite=True)
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        mol = Chem.AddHs(mol)
+
+        params = AllChem.ETKDGv3()
+        params.randomSeed = 0xF00D
+        if AllChem.EmbedMolecule(mol, params) != 0:
+            # Retry with random coordinates as a fallback for tricky molecules
+            if AllChem.EmbedMolecule(mol, useRandomCoords=True, randomSeed=0xF00D) != 0:
+                return None
+
+        # Optimize geometry; MMFF94 first, falling back to UFF if unsupported
+        try:
+            AllChem.MMFFOptimizeMolecule(mol)
+        except Exception:
+            try:
+                AllChem.UFFOptimizeMolecule(mol)
+            except Exception:
+                pass
+
+        writer = Chem.SDWriter(filename)
+        writer.write(mol)
+        writer.close()
         return filename
     except Exception:
         return None
@@ -326,24 +351,24 @@ if __name__ == "__main__":
         # --- Initial Structure Display ---
         st.header("Initial Structure", divider="rainbow")
         
-        initial_mol2_path = smiles_to_mol2_file(smiles_input, "initial.mol2")
+        initial_structure_path = smiles_to_3d_file(smiles_input, "initial.sdf")
         img_initial = smiles_to_2d_image(smiles_input)
 
-        if initial_mol2_path and img_initial:
+        if initial_structure_path and img_initial:
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader("2D Structure")
                 st.image(img_initial, width="stretch")
             with col2:
                 st.subheader("3D Structure")
-                st_molstar(initial_mol2_path, key="molstar_initial")
-                
-                mol2_content = read_file_content(initial_mol2_path)
+                st_molstar(initial_structure_path, key="molstar_initial")
+
+                sdf_content = read_file_content(initial_structure_path)
                 st.download_button(
-                    label="Download .mol2 File",
-                    data=mol2_content,
-                    file_name="initial_structure.mol2",
-                    mime="chemical/x-mol2"
+                    label="Download .sdf File",
+                    data=sdf_content,
+                    file_name="initial_structure.sdf",
+                    mime="chemical/x-mdl-sdfile"
                 )
         else:
             st.error("Invalid SMILES string. Please check your input.")
@@ -405,30 +430,30 @@ if __name__ == "__main__":
                         smi, label = results[i]
                         with tab:
                             st.code(smi, language="smiles")
-                            mol2_path = smiles_to_mol2_file(smi, f"protonated_{i}.mol2")
+                            structure_path = smiles_to_3d_file(smi, f"protonated_{i}.sdf")
                             img = smiles_to_2d_image(smi)
-                            
-                            if mol2_path and img:
+
+                            if structure_path and img:
                                 c3, c4 = st.columns(2)
                                 with c3:
                                     st.image(img, width="stretch")
                                 with c4:
-                                    st_molstar(mol2_path, key=f"molstar_res_{i}")
-                                    content = read_file_content(mol2_path)
-                                    st.download_button("Download", content, f"structure_{i}.mol2", "chemical/x-mol2", key=f"dl_{i}")
+                                    st_molstar(structure_path, key=f"molstar_res_{i}")
+                                    content = read_file_content(structure_path)
+                                    st.download_button("Download", content, f"structure_{i}.sdf", "chemical/x-mdl-sdfile", key=f"dl_{i}")
                 else:
                     # Single result
                     smi, label = results[0]
                     st.subheader(label)
                     st.code(smi, language="smiles")
-                    mol2_path = smiles_to_mol2_file(smi, f"protonated.mol2")
+                    structure_path = smiles_to_3d_file(smi, f"protonated.sdf")
                     img = smiles_to_2d_image(smi)
-                    
-                    if mol2_path and img:
+
+                    if structure_path and img:
                         c3, c4 = st.columns(2)
                         with c3:
                             st.image(img, width="stretch")
                         with c4:
-                            st_molstar(mol2_path, key=f"molstar_res_single")
-                            content = read_file_content(mol2_path)
-                            st.download_button("Download", content, "protonated_structure.mol2", "chemical/x-mol2")
+                            st_molstar(structure_path, key=f"molstar_res_single")
+                            content = read_file_content(structure_path)
+                            st.download_button("Download", content, "protonated_structure.sdf", "chemical/x-mdl-sdfile")

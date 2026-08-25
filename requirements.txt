@@ -1,5 +1,4 @@
 rdkit
-openbabel-wheel
 dimorphite-dl
 streamlit
 streamlit-molstar
