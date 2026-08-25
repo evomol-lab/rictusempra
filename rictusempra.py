@@ -268,6 +268,67 @@ def summarize_fraction_at_ph(states: list, ph: float) -> pd.DataFrame:
         })
     return pd.DataFrame(rows)
 
+def build_macrospecies_distribution_at_ph(states: list, ph: float) -> pd.DataFrame:
+    """
+    Computes the population distribution across the molecule's sequential
+    macrospecies (overall protonation states) at a given pH.
+
+    The `n` pKa transitions identified by pkasolver define a ladder of
+    `n + 1` macrospecies, from the most protonated (index 0, before any of
+    the identified groups has lost a proton) to the most deprotonated
+    (index n, after all of them have). Each step between consecutive
+    macrospecies follows Henderson-Hasselbalch, so the fraction of
+    macrospecies `i` relative to macrospecies `i-1` is `10 ** (pH - pKa_i)`.
+    Chaining these ratios and normalizing gives a distribution that always
+    sums to 1 (100%) — unlike the per-site ratios in
+    `build_ph_distribution_df`, which treat each site independently.
+    """
+    pkas = sorted(float(s.pka) for s in states)
+    n = len(pkas)
+
+    # log10 of the (unnormalized) weight of each macrospecies, built
+    # cumulatively to stay numerically stable regardless of how many
+    # ionizable groups are chained together.
+    log_weights = [0.0]
+    for pka in pkas:
+        log_weights.append(log_weights[-1] + (ph - pka))
+
+    max_log = max(log_weights)
+    weights = [10.0 ** (lw - max_log) for lw in log_weights]
+    total = sum(weights)
+    fractions = [w / total for w in weights]
+
+    rows = []
+    for i, frac in enumerate(fractions):
+        if i == 0:
+            desc = "mais protonada"
+        elif i == n:
+            desc = "mais desprotonada"
+        else:
+            desc = f"{i} próton(s) removido(s)"
+        rows.append({
+            "Microespécie": f"Microespécie {i + 1}",
+            "Descrição": desc,
+            "Prótons removidos": i,
+            "Fração": frac,
+            "Percentual": frac * 100.0,
+        })
+    return pd.DataFrame(rows)
+
+def plot_macrospecies_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
+    """
+    Bar chart of the population distribution across macrospecies at the
+    target pH (bars sum to 100%), with the percentage labeled on each bar.
+    """
+    order = df["Microespécie"].tolist()
+    bars = alt.Chart(df).mark_bar().encode(
+        x=alt.X("Microespécie:N", sort=order, title="Microespécie (mais protonada → mais desprotonada)"),
+        y=alt.Y("Percentual:Q", title="% da população total", scale=alt.Scale(domain=[0, 100])),
+        tooltip=["Microespécie", "Descrição", alt.Tooltip("Percentual:Q", format=".2f")],
+    )
+    labels = bars.mark_text(dy=-8).encode(text=alt.Text("Percentual:Q", format=".1f"))
+    return (bars + labels).properties(height=320, title=f"Distribuição das microespécies em pH {target_ph:.2f}")
+
 def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
     """
     Builds an Altair chart with one curve per ionizable group/tautomer showing
@@ -409,6 +470,24 @@ if __name__ == "__main__":
                             width="stretch",
                             hide_index=True,
                         )
+
+                        # --- Population distribution across macrospecies at the target pH (sums to 100%) ---
+                        st.subheader(f"Quantidade de cada microespécie em pH {target_ph:.2f}")
+                        st.caption(
+                            "Diferente do gráfico acima (que trata cada sítio isoladamente), aqui a "
+                            "molécula é dividida nas microespécies sequenciais definidas pelos pKa "
+                            "identificados — da forma mais protonada à mais desprotonada — e a fração "
+                            "de cada uma no pH escolhido é calculada encadeando Henderson-Hasselbalch "
+                            "ao longo da escada de pKa. As frações sempre somam 1 (100%)."
+                        )
+                        macro_df = build_macrospecies_distribution_at_ph(states, target_ph)
+                        st.altair_chart(plot_macrospecies_distribution(macro_df, target_ph), use_container_width=True)
+                        st.dataframe(
+                            macro_df[["Microespécie", "Descrição", "Percentual"]].round({"Percentual": 2}),
+                            width="stretch",
+                            hide_index=True,
+                        )
+                        st.caption(f"Soma das frações: {macro_df['Percentual'].sum():.2f}%")
 
             else: # Dimorphite
                 with st.spinner("Running Dimorphite-DL..."):
