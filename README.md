@@ -12,6 +12,8 @@ Rictusempra is a web-based cheminformatics tool for interactively visualizing sm
 
 Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.br), UFRN, Brazil.
 
+> **Note:** The application's user interface (labels, charts, tables) is entirely in **English**. This documentation is also in English; only commit messages and pull request discussions for this project may be written in Portuguese.
+
 ---
 
 ## Highlights & Improvements 🚀
@@ -20,6 +22,8 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 - **Enhanced Fallback**: Improved integration with **Dimorphite-DL** to display *all* plausible protonation states (microspecies) when using the standard method.
 - **Interactive Methodology**: Choose between "Advanced (pkasolver)" and "Standard (Dimorphite-DL)" calculation modes directly from the UI.
 - **Tautomer/Microspecies Ratio vs. pH**: For each ionizable group identified by pkasolver, plots the protonated/deprotonated ratio across a full pH range (Henderson-Hasselbalch), with the group's pKa and the chosen target pH marked on the curve, plus a summary table with the exact percentages at the target pH.
+- **Microspecies Distribution at the Target pH**: Splits the molecule into its sequential microspecies (from the most protonated to the most deprotonated form, as defined by the pKa ladder) and shows the exact percentage of each one at the chosen pH — the percentages always add up to 100%.
+- **Microspecies Distribution Across the Full pH Range**: A classic species-distribution diagram — a stacked area chart sweeping pH 0–14 in 0.5 steps, one color per microspecies, always summing to 100% at every pH — plus a downloadable CSV of the underlying data.
 
 ---
 
@@ -34,6 +38,10 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
     - **Standard**: Uses `Dimorphite-DL` to enumerate highly probable protonation states within a user-defined pH range.
 
 - **Tautomer/Microspecies Ratio vs. pH and pKa**: When using the Advanced (pkasolver) method, shows an interactive chart with the protonated/deprotonated ratio of each ionizable group as a function of pH (Henderson-Hasselbalch), plus a table with the exact percentages at the selected target pH.
+
+- **Microspecies Distribution at the Target pH**: Also under the Advanced (pkasolver) method, a second chart shows how the molecule's total population is split across its sequential microspecies (most protonated → most deprotonated) at the chosen pH, chaining Henderson-Hasselbalch along the identified pKa ladder — the percentages shown always sum to 100%, unlike the per-site ratio above, which considers each ionizable group in isolation.
+
+- **Microspecies Distribution Across the Full pH Range**: A third chart sweeps the same microspecies breakdown across pH 0–14 in steps of 0.5, rendered as a stacked area chart with one color per microspecies (stack always sums to 100% at every pH), with the underlying pH-sweep table available as a CSV download.
 
 - **Side-by-Side Comparison**: Displays the initial and protonated structures next to each other for easy comparison.
 
@@ -122,7 +130,11 @@ A new tab will open in your web browser with the application running.
     - If multiple valid states are found, they will be shown in tabs.
     - You can download the `.sdf` files for any generated structure.
 
-6. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Razão de cada tautômero em função do pH e do pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
+6. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Ratio of each tautomer as a function of pH and pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
+
+7. **Check the Microspecies Distribution (Advanced method only)**: Right below that, the "Amount of each microspecies at pH X" section shows a bar chart with the percentage of each sequential microspecies (most protonated → most deprotonated) at your target pH, plus a table and the sum of the percentages (always 100%).
+
+8. **Explore the Full pH Sweep (Advanced method only)**: The "Microspecies distribution across the pH range" section shows the same breakdown as a stacked area chart swept over pH 0–14 (steps of 0.5), one color per microspecies. Use the "Download pH sweep data (.csv)" button to get the full table (pH, microspecies, description, fraction, percentage) for further analysis.
 
 ---
 
