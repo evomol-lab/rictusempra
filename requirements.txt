@@ -4,6 +4,8 @@ dimorphite-dl
 streamlit
 streamlit-molstar
 numpy
+pandas
+altair
 torch
 torch_geometric
 tqdm
