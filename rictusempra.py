@@ -2,6 +2,7 @@ import streamlit as st
 import subprocess
 import os
 import shutil
+import io
 import numpy as np
 import pandas as pd
 import altair as alt
@@ -31,35 +32,46 @@ def smiles_to_2d_image(smiles: str):
     except Exception:
         return None
 
+def _embed_and_optimize_3d(mol: Chem.Mol) -> Chem.Mol | None:
+    """
+    Embeds 3D coordinates (ETKDG) and optimizes the geometry (MMFF94,
+    falling back to UFF) for an RDKit Mol that already has explicit
+    hydrogens. Mutates and returns `mol`, or returns None if embedding
+    fails even after the random-coordinates fallback.
+
+    Uses RDKit instead of Open Babel so the whole toolchain stays under
+    permissive (non-copyleft) licenses.
+    """
+    params = AllChem.ETKDGv3()
+    params.randomSeed = 0xF00D
+    if AllChem.EmbedMolecule(mol, params) != 0:
+        # Retry with random coordinates as a fallback for tricky molecules
+        if AllChem.EmbedMolecule(mol, useRandomCoords=True, randomSeed=0xF00D) != 0:
+            return None
+
+    # Optimize geometry; MMFF94 first, falling back to UFF if unsupported
+    try:
+        AllChem.MMFFOptimizeMolecule(mol)
+    except Exception:
+        try:
+            AllChem.UFFOptimizeMolecule(mol)
+        except Exception:
+            pass
+
+    return mol
+
 def smiles_to_3d_file(smiles: str, filename: str) -> str | None:
     """
     Generates a 3D structure using RDKit (ETKDG embedding + MMFF/UFF force
     field optimization) and saves it as an SDF file. Returns the path.
-
-    Uses RDKit instead of Open Babel so the whole toolchain stays under
-    permissive (non-copyleft) licenses.
     """
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
         mol = Chem.AddHs(mol)
-
-        params = AllChem.ETKDGv3()
-        params.randomSeed = 0xF00D
-        if AllChem.EmbedMolecule(mol, params) != 0:
-            # Retry with random coordinates as a fallback for tricky molecules
-            if AllChem.EmbedMolecule(mol, useRandomCoords=True, randomSeed=0xF00D) != 0:
-                return None
-
-        # Optimize geometry; MMFF94 first, falling back to UFF if unsupported
-        try:
-            AllChem.MMFFOptimizeMolecule(mol)
-        except Exception:
-            try:
-                AllChem.UFFOptimizeMolecule(mol)
-            except Exception:
-                pass
+        if _embed_and_optimize_3d(mol) is None:
+            return None
 
         writer = Chem.SDWriter(filename)
         writer.write(mol)
@@ -389,6 +401,67 @@ def plot_ph_distribution(df: pd.DataFrame, target_ph: float) -> alt.LayerChart:
 
     return (base + pka_rule + ph_rule).properties(height=350)
 
+def build_microspecies_ladder(states: list) -> list[dict]:
+    """
+    Reconstructs the structure of every microspecies on the sequential pKa
+    ladder (see `build_macrospecies_distribution_at_ph`), from the most
+    protonated to the most deprotonated form.
+
+    Sorted by ascending pKa, `state.protonated_mol` is the species favored
+    below that transition's pKa and `state.deprotonated_mol` the species
+    favored above it, with each transition's deprotonated form equal to the
+    next transition's protonated form. Chaining them therefore reconstructs
+    all `n + 1` rungs of the ladder from the `n` transitions.
+
+    Returns a list of dicts (same order/indexing as
+    `build_macrospecies_distribution_at_ph`): {"index" (1-based, matching
+    the "Microspecies N" labels), "smiles", "protons_removed"}.
+    """
+    sorted_states = sorted(states, key=lambda s: s.pka)
+    rungs = [Chem.MolToSmiles(sorted_states[0].protonated_mol)]
+    for state in sorted_states:
+        rungs.append(Chem.MolToSmiles(state.deprotonated_mol))
+
+    return [
+        {"index": i + 1, "smiles": smi, "protons_removed": i}
+        for i, smi in enumerate(rungs)
+    ]
+
+def find_major_microspecies_index(ladder: list[dict], major_smiles: str | None) -> int | None:
+    """Returns the 1-based ladder index whose SMILES matches `major_smiles`, or None."""
+    if not major_smiles:
+        return None
+    for item in ladder:
+        if item["smiles"] == major_smiles:
+            return item["index"]
+    return None
+
+def build_microspecies_sdf_content(ladder: list[dict]) -> str | None:
+    """
+    Generates a 3D structure (same RDKit ETKDG + MMFF/UFF pipeline as
+    `smiles_to_3d_file`) for every microspecies in `ladder` and writes them
+    into a single multi-record .sdf string, tagging each record with its
+    microspecies index, protons removed, and SMILES as SDF properties.
+    """
+    buffer = io.StringIO()
+    writer = Chem.SDWriter(buffer)
+    wrote_any = False
+    for item in ladder:
+        mol = Chem.MolFromSmiles(item["smiles"])
+        if mol is None:
+            continue
+        mol = Chem.AddHs(mol)
+        if _embed_and_optimize_3d(mol) is None:
+            continue
+        mol.SetProp("_Name", f"Microspecies_{item['index']}")
+        mol.SetProp("Microspecies", str(item["index"]))
+        mol.SetProp("ProtonsRemoved", str(item["protons_removed"]))
+        mol.SetProp("SMILES", item["smiles"])
+        writer.write(mol)
+        wrote_any = True
+    writer.close()
+    return buffer.getvalue() if wrote_any else None
+
 # --- Streamlit App ---
 
 if __name__ == "__main__":
@@ -517,12 +590,68 @@ if __name__ == "__main__":
                         )
                         macro_df = build_macrospecies_distribution_at_ph(states, target_ph)
                         st.altair_chart(plot_macrospecies_distribution(macro_df, target_ph), use_container_width=True)
-                        st.dataframe(
-                            macro_df[["Microspecies", "Description", "Percentage"]].round({"Percentage": 2}),
-                            width="stretch",
-                            hide_index=True,
-                        )
+
+                        ladder = build_microspecies_ladder(states)
+                        major_index = find_major_microspecies_index(ladder, best_smi)
+
+                        table_df = macro_df[["Microspecies", "Description", "Percentage"]].round({"Percentage": 2})
+                        if major_index is not None:
+                            def _highlight_major(row):
+                                is_major = int(row["Microspecies"].rsplit(" ", 1)[-1]) == major_index
+                                style = "background-color: rgba(255, 215, 0, 0.25); font-weight: bold"
+                                return [style if is_major else "" for _ in row]
+                            st.dataframe(table_df.style.apply(_highlight_major, axis=1), width="stretch", hide_index=True)
+                        else:
+                            st.dataframe(table_df, width="stretch", hide_index=True)
                         st.caption(f"Sum of fractions: {macro_df['Percentage'].sum():.2f}%")
+
+                        # --- Individual microspecies structures: view & download .sdf ---
+                        st.subheader("Microspecies Structures")
+                        st.caption(
+                            "2D structure of every microspecies on the pKa ladder above, numbered to "
+                            "match the table (Microspecies 1 = most protonated → last = most "
+                            "deprotonated). The major microspecies at the target pH is highlighted in "
+                            "gold. Each structure can be downloaded as a 3D .sdf file individually, or "
+                            "all together below."
+                        )
+                        if major_index is not None:
+                            st.markdown(f"⭐ **Major microspecies at pH {target_ph:.2f}: Microspecies {major_index}**")
+
+                        combined_sdf = build_microspecies_sdf_content(ladder)
+                        if combined_sdf:
+                            st.download_button(
+                                label="Download all microspecies (.sdf, multi-structure)",
+                                data=combined_sdf,
+                                file_name="all_microspecies.sdf",
+                                mime="chemical/x-mdl-sdfile",
+                            )
+
+                        cols_per_row = 4
+                        for row_start in range(0, len(ladder), cols_per_row):
+                            row_items = ladder[row_start:row_start + cols_per_row]
+                            row_cols = st.columns(cols_per_row)
+                            for col, item in zip(row_cols, row_items):
+                                with col:
+                                    is_major = item["index"] == major_index
+                                    with st.container(border=is_major):
+                                        label = f"**Microspecies {item['index']}**"
+                                        if is_major:
+                                            label += " ⭐ Major"
+                                        st.markdown(label)
+                                        micro_img = smiles_to_2d_image(item["smiles"])
+                                        if micro_img:
+                                            st.image(micro_img, width="stretch")
+                                        else:
+                                            st.caption("Could not render structure.")
+                                        micro_sdf_path = smiles_to_3d_file(item["smiles"], f"microspecies_{item['index']}.sdf")
+                                        if micro_sdf_path:
+                                            st.download_button(
+                                                "Download .sdf",
+                                                read_file_content(micro_sdf_path),
+                                                f"microspecies_{item['index']}.sdf",
+                                                "chemical/x-mdl-sdfile",
+                                                key=f"dl_micro_{item['index']}",
+                                            )
 
                         # --- Microspecies distribution swept across the full pH range ---
                         st.subheader("Microspecies distribution across the pH range")

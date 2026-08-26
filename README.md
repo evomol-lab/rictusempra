@@ -24,6 +24,7 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 - **Tautomer/Microspecies Ratio vs. pH**: For each ionizable group identified by pkasolver, plots the protonated/deprotonated ratio across a full pH range (Henderson-Hasselbalch), with the group's pKa and the chosen target pH marked on the curve, plus a summary table with the exact percentages at the target pH.
 - **Microspecies Distribution at the Target pH**: Splits the molecule into its sequential microspecies (from the most protonated to the most deprotonated form, as defined by the pKa ladder) and shows the exact percentage of each one at the chosen pH — the percentages always add up to 100%.
 - **Microspecies Distribution Across the Full pH Range**: A classic species-distribution diagram — a stacked area chart sweeping pH 0–14 in 0.5 steps, one color per microspecies, always summing to 100% at every pH — plus a downloadable CSV of the underlying data.
+- **Microspecies Gallery with Structure Downloads**: Below the microspecies table, small 2D structure images of every microspecies on the pKa ladder are shown side by side, numbered to match the table and organized in rows. The major microspecies at the target pH is highlighted with a gold border. Each structure's 3D `.sdf` can be downloaded individually, and all of them can also be downloaded together as a single multi-structure `.sdf` file.
 
 ---
 
@@ -43,9 +44,11 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 - **Microspecies Distribution Across the Full pH Range**: A third chart sweeps the same microspecies breakdown across pH 0–14 in steps of 0.5, rendered as a stacked area chart with one color per microspecies (stack always sums to 100% at every pH), with the underlying pH-sweep table available as a CSV download.
 
+- **Microspecies Gallery with Structure Downloads**: Under the microspecies table, every microspecies on the pKa ladder — from the most protonated to the most deprotonated form — gets its own small 2D structure image, numbered to match the table and laid out in rows. The major microspecies at the target pH is visually highlighted (gold border, and marked with ⭐ in both the table and the gallery) so it stays easy to spot among the rest. Each structure's 3D `.sdf` can be downloaded individually, or all of them at once as a single multi-structure `.sdf` file.
+
 - **Side-by-Side Comparison**: Displays the initial and protonated structures next to each other for easy comparison.
 
-- **Structure Download**: Allows users to download the generated 3D structures in `.sdf` format.
+- **Structure Download**: Allows users to download the generated 3D structures in `.sdf` format, for the initial structure, each protonation-state result, and every individual microspecies (or all microspecies at once).
 
 ---
 
@@ -132,9 +135,11 @@ A new tab will open in your web browser with the application running.
 
 6. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Ratio of each tautomer as a function of pH and pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
 
-7. **Check the Microspecies Distribution (Advanced method only)**: Right below that, the "Amount of each microspecies at pH X" section shows a bar chart with the percentage of each sequential microspecies (most protonated → most deprotonated) at your target pH, plus a table and the sum of the percentages (always 100%).
+7. **Check the Microspecies Distribution (Advanced method only)**: Right below that, the "Amount of each microspecies at pH X" section shows a bar chart with the percentage of each sequential microspecies (most protonated → most deprotonated) at your target pH, plus a table and the sum of the percentages (always 100%). The row for the major microspecies at the target pH is highlighted in gold.
 
-8. **Explore the Full pH Sweep (Advanced method only)**: The "Microspecies distribution across the pH range" section shows the same breakdown as a stacked area chart swept over pH 0–14 (steps of 0.5), one color per microspecies. Use the "Download pH sweep data (.csv)" button to get the full table (pH, microspecies, description, fraction, percentage) for further analysis.
+8. **View and Download Every Microspecies Structure (Advanced method only)**: Below the table, the "Microspecies Structures" section shows a small 2D structure image for each microspecies, numbered to match the table and organized in rows. The major microspecies is outlined in gold and marked with ⭐. Use the "Download .sdf" button under any structure to get its individual 3D file, or the "Download all microspecies (.sdf, multi-structure)" button above the gallery to get every microspecies in one combined `.sdf` file.
+
+9. **Explore the Full pH Sweep (Advanced method only)**: The "Microspecies distribution across the pH range" section shows the same breakdown as a stacked area chart swept over pH 0–14 (steps of 0.5), one color per microspecies. Use the "Download pH sweep data (.csv)" button to get the full table (pH, microspecies, description, fraction, percentage) for further analysis.
 
 ---
 
