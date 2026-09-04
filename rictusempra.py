@@ -472,8 +472,12 @@ if __name__ == "__main__":
 
     with st.sidebar:
         st.image("Rictusempra.png", width="stretch")
-        st.sidebar.markdown('*Rictusempra* is a web-based cheminformatics tool for interactively visualizing small molecules and calculating their most likely protonation state at a given physiological pH. \n'
-                      'It provides a simple interface to generate 2D and 3D molecular structures and prepare them for further computational chemistry tasks like molecular docking or simulation.')
+        st.sidebar.markdown('Rictusempra is a web-based cheminformatics platform designed for the interactive visualization \n'
+        'and advanced protonation state analysis of small molecules. By integrating a Graph Neural Network model (pkasolver) \n' \
+        'alongside standard algorithms (Dimorphite-DL), the tool calculates precise microspecies distributions, pKa transitions, \n'
+        'and plausible ionization states across any user-defined pH range. Rictusempra streamlines ligand preparation for computational \n' \
+        'tasks like molecular docking by pairing its predictive engine with interactive 2D and 3D rendering, detailed pH-dependent \n' \
+        'distribution charting, and flexible .sdf structure exports.')
         st.sidebar.markdown('Please see the [documentation](https://github.com/jpmslima/rictusempra) for more information.')
         st.sidebar.markdown('Developed by the [EvoMol-Lab](github.com/evomol-lab).\n'
                         '[BioME](bioinfo.imd.ufrn.br), UFRN, Brazil.')
@@ -505,10 +509,10 @@ if __name__ == "__main__":
                 max_ph = target_ph + 0.2
                 
             method = st.radio("Calculation Method", 
-                              ["Advanced MicroPka (pkasolver)", "Standard (Dimorphite-DL)"],
+                              ["Advanced (pkasolver)", "Standard (Dimorphite-DL)"],
                               index=0 if HAS_PKASOLVER else 1)
             
-            if not HAS_PKASOLVER and method == "Advanced MicroPka (pkasolver)":
+            if not HAS_PKASOLVER and method == "Advanced (pkasolver)":
                 st.warning(f"pkasolver is not installed. Falling back to Dimorphite-DL. Error: {PKASOLVER_ERROR}")
             
             submitted = st.form_submit_button("Calculate Protonation State")
@@ -547,7 +551,7 @@ if __name__ == "__main__":
             
             results = [] # List of (smiles, label)
             
-            if method == "Advanced MicroPka (pkasolver)" and HAS_PKASOLVER:
+            if method == "Advanced (pkasolver)" and HAS_PKASOLVER:
                 with st.spinner("Running pkasolver (Micro-pKa)..."):
                     best_smi, info, states = calculate_major_microspecies_pkasolver(smiles_input, target_ph)
                     if best_smi:
