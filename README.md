@@ -16,39 +16,25 @@ Developed by the [EvoMol-Lab](github.com/evomol-lab), [BioME](bioinfo.imd.ufrn.b
 
 ---
 
-## Highlights & Improvements 🚀
-
-- **Advanced Micro-pKa Prediction**: Now integrates **pkasolver**, a Graph Neural Network (GNN) model, to scientifically predict micro-pKa values and determining the major microspecies with high accuracy.
-- **Enhanced Fallback**: Improved integration with **Dimorphite-DL** to display *all* plausible protonation states (microspecies) when using the standard method.
-- **Interactive Methodology**: Choose between "Advanced (pkasolver)" and "Standard (Dimorphite-DL)" calculation modes directly from the UI.
-- **Tautomer/Microspecies Ratio vs. pH**: For each ionizable group identified by pkasolver, plots the protonated/deprotonated ratio across a full pH range (Henderson-Hasselbalch), with the group's pKa and the chosen target pH marked on the curve, plus a summary table with the exact percentages at the target pH.
-- **Microspecies Distribution at the Target pH**: Splits the molecule into its sequential microspecies (from the most protonated to the most deprotonated form, as defined by the pKa ladder) and shows the exact percentage of each one at the chosen pH — the percentages always add up to 100%.
-- **Microspecies Distribution Across the Full pH Range**: A classic species-distribution diagram — a stacked area chart sweeping pH 0–14 in 0.5 steps, one color per microspecies, always summing to 100% at every pH — plus a downloadable CSV of the underlying data.
-- **Microspecies Gallery with Structure Downloads**: Below the microspecies table, small 2D structure images of every microspecies on the pKa ladder are shown side by side, numbered to match the table and organized in rows. The major microspecies at the target pH is highlighted with a gold border. Each structure's 3D `.sdf` can be downloaded individually, and all of them can also be downloaded together as a single multi-structure `.sdf` file.
-
----
-
 ## Core Features
 
-- **SMILES Input**: Accepts a SMILES string to define the initial molecule.
+- **Input Versatility**: Accepts a SMILES string and PubChem CID to fetch the desired molecule.
 
-- **2D & 3D Visualization**: Instantly renders 2D chemical diagrams and interactive 3D structures (via RDKit & streamlit-molstar).
+- **2D & 3D Visualization**: Instantly renders a 2D chemical diagram and an interactive 3D structure (via RDKit & streamlit-molstar) of the input mmolecule.
 
 - **Protonation State Calculation**:
-    - **Advanced**: Uses `pkasolver` to identify the major microspecies based on specific pKa transitions.
-    - **Standard**: Uses `Dimorphite-DL` to enumerate highly probable protonation states within a user-defined pH range.
+    - **Advanced**: Uses `pkasolver`, a Graph Neural Network model, to identify the major microspecies based on specific pKa transitions.
+    - **Standard**: Uses `Dimorphite-DL` to display all plausible protonation states within a user-defined pH range.
 
-- **Tautomer/Microspecies Ratio vs. pH and pKa**: When using the Advanced (pkasolver) method, shows an interactive chart with the protonated/deprotonated ratio of each ionizable group as a function of pH (Henderson-Hasselbalch), plus a table with the exact percentages at the selected target pH.
+- **Tautomer/Microspecies Ratio vs. pH**: When using the Advanced (pkasolver) method, shows an interactive chart with the protonated/deprotonated ratio of each ionizable group as a function of pH (Henderson-Hasselbalch), plus a table with the exact percentages at the selected target pH.
 
 - **Microspecies Distribution at the Target pH**: Also under the Advanced (pkasolver) method, a second chart shows how the molecule's total population is split across its sequential microspecies (most protonated → most deprotonated) at the chosen pH, chaining Henderson-Hasselbalch along the identified pKa ladder — the percentages shown always sum to 100%, unlike the per-site ratio above, which considers each ionizable group in isolation.
 
-- **Microspecies Distribution Across the Full pH Range**: A third chart sweeps the same microspecies breakdown across pH 0–14 in steps of 0.5, rendered as a stacked area chart with one color per microspecies (stack always sums to 100% at every pH), with the underlying pH-sweep table available as a CSV download.
-
 - **Microspecies Gallery with Structure Downloads**: Under the microspecies table, every microspecies on the pKa ladder — from the most protonated to the most deprotonated form — gets its own small 2D structure image, numbered to match the table and laid out in rows. The major microspecies at the target pH is visually highlighted (gold border, and marked with ⭐ in both the table and the gallery) so it stays easy to spot among the rest. Each structure's 3D `.sdf` can be downloaded individually, or all of them at once as a single multi-structure `.sdf` file.
 
-- **Side-by-Side Comparison**: Displays the initial and protonated structures next to each other for easy comparison.
+- **Microspecies Distribution Across the Full pH Range**: A third chart sweeps the same microspecies breakdown across pH 0–14 in steps of 0.5, rendered as a stacked area chart with one color per microspecies (stack always sums to 100% at every pH), with the underlying pH-sweep table available as a CSV download.
 
-- **Structure Download**: Allows users to download the generated 3D structures in `.sdf` format, for the initial structure, each protonation-state result, and every individual microspecies (or all microspecies at once).
+- **Structures Download**: Allows users to download the generated 3D structures in `.sdf` format, for the initial structure, each protonation-state result, and every individual microspecies (or all microspecies at once).
 
 ---
 
@@ -89,9 +75,6 @@ It's best practice to create a dedicated environment for the tool.
 # Create and activate the conda environment
 conda create -n rictusempra python=3.9
 conda activate rictusempra
-
-# Install packages from conda-forge
-conda install -c conda-forge rdkit dimorphite-dl
 ```
 
 ### Step 3: Install Pip Dependencies
@@ -99,7 +82,7 @@ conda install -c conda-forge rdkit dimorphite-dl
 Install the remaining Python packages using pip.
 
 ```
-pip install streamlit streamlit-molstar torch torch-geometric
+pip install -r requirements.txt
 ```
 
 *Note: For `pkasolver`, you may need to install it from source or check compatibility with your specific environment.*
@@ -118,28 +101,24 @@ A new tab will open in your web browser with the application running.
 
 ### How to Use the Tool:
 
-1. **Enter SMILES**: In the sidebar on the left, enter the SMILES string of the molecule you want to analyze. The initial 2D and 3D structures will appear on the main panel.
+1. **Set the Input Molecule**: In the sidebar on the left, enter the SMILES string or PubChem CID of the molecule you want to analyze. The initial 2D and 3D structures will appear on the main panel.
 
 2. **Set pH**: Enter the target pH (default 7.4).
-    - If using **Dimorphite-DL**, you can optionally define a min/max range.
+    - If using **Dimorphite-DL**, you can optionally define a min/max pH range.
 
 3. **Select Method**: Choose between:
-    - **Advanced MicroPka (pkasolver)**: Best for finding the single most stable major microspecies.
-    - **Standard (Dimorphite-DL)**: Best for finding a range of possible states.
+    - **Advanced (pkasolver)**: Best for finding the single most stable major protonated structure and visualizing the microspecies related plots.
+    - **Standard (Dimorphite-DL)**: Best for finding all possible protonated variants within the designated pH range.
 
 4. **Calculate**: Click the "Calculate Protonation State" button.
 
-5. **View & Download**: The results for the protonated molecule(s) will appear below.
-    - If multiple valid states are found, they will be shown in tabs.
-    - You can download the `.sdf` files for any generated structure.
+5. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Ratio of each tautomer as a function of pH and pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
 
-6. **Check the Tautomer/Microspecies Ratio (Advanced method only)**: Below the pkasolver results, the "Ratio of each tautomer as a function of pH and pKa" section shows a chart with one curve per ionizable group — its protonated/deprotonated ratio across pH 0–14, with its pKa and your target pH marked — plus a table with the exact percentages at the target pH.
+6. **Check the Microspecies Distribution (Advanced method only)**: Right below that, the "Amount of each microspecies at pH X" section shows a bar chart with the percentage of each sequential microspecies (most protonated → most deprotonated) at your target pH, plus a table and the sum of the percentages (always 100%). The row for the major microspecies at the target pH is highlighted in gold.
 
-7. **Check the Microspecies Distribution (Advanced method only)**: Right below that, the "Amount of each microspecies at pH X" section shows a bar chart with the percentage of each sequential microspecies (most protonated → most deprotonated) at your target pH, plus a table and the sum of the percentages (always 100%). The row for the major microspecies at the target pH is highlighted in gold.
+7. **View and Download Every Microspecies Structure (Advanced method only)**: Below the table, the "Microspecies Structures" section shows a small 2D structure image for each microspecies, numbered to match the table and organized in rows. The major microspecies is outlined in gold and marked with ⭐. Use the "Download .sdf" button under any structure to get its individual 3D file, or the "Download all microspecies (.sdf, multi-structure)" button above the gallery to get every microspecies in one combined `.sdf` file.
 
-8. **View and Download Every Microspecies Structure (Advanced method only)**: Below the table, the "Microspecies Structures" section shows a small 2D structure image for each microspecies, numbered to match the table and organized in rows. The major microspecies is outlined in gold and marked with ⭐. Use the "Download .sdf" button under any structure to get its individual 3D file, or the "Download all microspecies (.sdf, multi-structure)" button above the gallery to get every microspecies in one combined `.sdf` file.
-
-9. **Explore the Full pH Sweep (Advanced method only)**: The "Microspecies distribution across the pH range" section shows the same breakdown as a stacked area chart swept over pH 0–14 (steps of 0.5), one color per microspecies. Use the "Download pH sweep data (.csv)" button to get the full table (pH, microspecies, description, fraction, percentage) for further analysis.
+8. **Explore the Full pH Sweep (Advanced method only)**: The "Microspecies distribution across the pH range" section shows the same breakdown as a stacked area chart swept over pH 0–14 (steps of 0.5), one color per microspecies. Use the "Download pH sweep data (.csv)" button to get the full table (pH, microspecies, description, fraction, percentage) for further analysis.
 
 ---
 
