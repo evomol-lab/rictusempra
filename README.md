@@ -4,7 +4,7 @@
 
 # ***Rictusempra***: Interactive Molecule Protonation Tool 🧪
 
-Rictusempra is a web-based cheminformatics tool for interactively visualizing small molecules and calculating their most likely protonation state at a given physiological pH. It provides a simple interface to generate 2D and 3D molecular structures and prepare them for further computational chemistry tasks like molecular docking or simulation.
+Rictusempra is a web-based cheminformatics platform designed for the interactive visualization and advanced protonation state analysis of small molecules. By integrating a Graph Neural Network model (pkasolver) alongside standard algorithms (Dimorphite-DL), the tool calculates precise microspecies distributions, pKa transitions, and plausible ionization states across any user-defined pH range. Rictusempra streamlines ligand preparation for computational tasks like molecular docking by pairing its predictive engine with interactive 2D and 3D rendering, detailed pH-dependent distribution charting, and flexible .sdf structure exports.
 
 <div align="center">
   <img src="EvoMol-logo.png" alt="Rictusempra Logo" width="100">
