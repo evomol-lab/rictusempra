@@ -517,6 +517,17 @@ if __name__ == "__main__":
             
             submitted = st.form_submit_button("Calculate Protonation State")
 
+    if submitted:
+        st.session_state["last_calculation"] = {
+            "smiles": smiles_input,
+            "target_ph": target_ph,
+            "min_ph": min_ph,
+            "max_ph": max_ph,
+            "method": method,
+        }
+
+    last_calculation = st.session_state.get("last_calculation")
+
     # --- Main Panel for Results ---
 
     if smiles_input:
@@ -546,14 +557,19 @@ if __name__ == "__main__":
             st.error("Invalid SMILES string. Please check your input.")
 
         # --- Protonated Structure Display (if calculation was run) ---
-        if submitted:
+        if last_calculation and last_calculation["smiles"] == smiles_input:
             st.header("Protonated Structure(s)", divider="rainbow")
             
             results = [] # List of (smiles, label)
+            calculation_smiles = last_calculation["smiles"]
+            calculation_target_ph = last_calculation["target_ph"]
+            calculation_min_ph = last_calculation["min_ph"]
+            calculation_max_ph = last_calculation["max_ph"]
+            calculation_method = last_calculation["method"]
             
-            if method == "Advanced (pkasolver)" and HAS_PKASOLVER:
+            if calculation_method == "Advanced (pkasolver)" and HAS_PKASOLVER:
                 with st.spinner("Running pkasolver (Micro-pKa)..."):
-                    best_smi, info, states = calculate_major_microspecies_pkasolver(smiles_input, target_ph)
+                    best_smi, info, states = calculate_major_microspecies_pkasolver(calculation_smiles, calculation_target_ph)
                     if best_smi:
                         results.append((best_smi, "Major Microspecies (pkasolver)"))
                         with st.expander("See pkasolver details"):
@@ -575,15 +591,15 @@ if __name__ == "__main__":
                             "group's pKa; the red dashed line marks the selected target pH."
                         )
                         dist_df = build_ph_distribution_df(states, ph_min=0.0, ph_max=14.0)
-                        st.altair_chart(plot_ph_distribution(dist_df, target_ph), use_container_width=True)
+                        st.altair_chart(plot_ph_distribution(dist_df, calculation_target_ph), use_container_width=True)
                         st.dataframe(
-                            summarize_fraction_at_ph(states, target_ph),
+                            summarize_fraction_at_ph(states, calculation_target_ph),
                             width="stretch",
                             hide_index=True,
                         )
 
                         # --- Population distribution across macrospecies at the target pH (sums to 100%) ---
-                        st.subheader(f"Amount of each microspecies at pH {target_ph:.2f}")
+                        st.subheader(f"Amount of each microspecies at pH {calculation_target_ph:.2f}")
                         st.caption(
                             "Unlike the chart above (which treats each site independently), here "
                             "the molecule is split into its sequential microspecies defined by the "
@@ -592,8 +608,8 @@ if __name__ == "__main__":
                             "calculated by chaining Henderson-Hasselbalch along the pKa ladder. "
                             "The fractions always add up to 1 (100%)."
                         )
-                        macro_df = build_macrospecies_distribution_at_ph(states, target_ph)
-                        st.altair_chart(plot_macrospecies_distribution(macro_df, target_ph), use_container_width=True)
+                        macro_df = build_macrospecies_distribution_at_ph(states, calculation_target_ph)
+                        st.altair_chart(plot_macrospecies_distribution(macro_df, calculation_target_ph), use_container_width=True)
 
                         ladder = build_microspecies_ladder(states)
                         major_index = find_major_microspecies_index(ladder, best_smi)
@@ -619,7 +635,7 @@ if __name__ == "__main__":
                             "all together below."
                         )
                         if major_index is not None:
-                            st.markdown(f"⭐ **Major microspecies at pH {target_ph:.2f}: Microspecies {major_index}**")
+                            st.markdown(f"⭐ **Major microspecies at pH {calculation_target_ph:.2f}: Microspecies {major_index}**")
 
                         combined_sdf = build_microspecies_sdf_content(ladder)
                         if combined_sdf:
@@ -666,7 +682,7 @@ if __name__ == "__main__":
                             "line marks the selected target pH."
                         )
                         sweep_df = build_macrospecies_distribution_sweep(states, ph_min=0.0, ph_max=14.0, step=0.5)
-                        st.altair_chart(plot_macrospecies_sweep(sweep_df, target_ph), use_container_width=True)
+                        st.altair_chart(plot_macrospecies_sweep(sweep_df, calculation_target_ph), use_container_width=True)
                         st.download_button(
                             label="Download pH sweep data (.csv)",
                             data=sweep_df.to_csv(index=False),
@@ -676,7 +692,7 @@ if __name__ == "__main__":
 
             else: # Dimorphite
                 with st.spinner("Running Dimorphite-DL..."):
-                    smi_list = run_dimorphite(smiles_input, min_ph, max_ph)
+                    smi_list = run_dimorphite(calculation_smiles, calculation_min_ph, calculation_max_ph)
                     if smi_list:
                         for i, smi in enumerate(smi_list):
                             results.append((smi, f"Variant {i+1} (Dimorphite-DL)"))
